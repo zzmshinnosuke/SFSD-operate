@@ -4,6 +4,7 @@ import argparse
 import os
 from tqdm import tqdm
 import numpy as np
+import math
 
 def sta_sketch_category_num(sketches, interval=10):
     '''
@@ -130,18 +131,53 @@ def sta_stroke_point_num(sketches,interval=100):
     print('max stroke_point_len is {},min stroke_point_len is {}, std stroke_point_len is {}, mean stroke_point_len is {}'.format(max(point_lens),min(point_lens),np.std(point_lens),np.mean(point_lens)))
     print(sorted_res)
     print(dict(sorted_res).keys(),dict(sorted_res).values())
-    
+
+def sta_sketch_point_num(sketches,interval=100):
+    '''
+    统计每个笔画包含的点数
+    '''
+    def get_points_len(sketch):
+        strokes = sketch.get_strokes()
+        points_len = 0
+        for stroke in strokes:
+            points_len += len(stroke["points"])
+        return points_len
+    print("统计每个笔画的采样点数:")
+    point_lens = list()
+    res = dict()
+    for sketch in tqdm(sketches):
+        strokes = sketch.get_strokes()
+        point_len = get_points_len(sketch)
+        point_len = point_len / 60 + len(strokes) / 3 
+        point_lens.append(point_len)
+        div=point_len//interval
+        temp_name = (div+1)*interval
+        if temp_name in res.keys():
+            res[temp_name] += 1 
+        else :
+            res[temp_name] = 1  
+    sorted_res = sorted(res.items(), key=lambda item: item[0], reverse=False)
+    print('max stroke_point_len is {},min stroke_point_len is {}, std stroke_point_len is {}, mean stroke_point_len is {}'.format(max(point_lens),min(point_lens),np.std(point_lens),np.mean(point_lens)))
+    print(sorted_res)
+    print(dict(sorted_res).keys(),dict(sorted_res).values())
+
 def sta_stroke_length_num(sketches,interval=100):
     '''
     统计笔画不同长度个数
     '''
+    def get_stroke_len(stroke):
+        points = stroke["points"]
+        stroke_len = 0.0
+        for i in range(1,len(points)):
+            stroke_len+=(math.sqrt(pow(points[i][0]-points[i-1][0],2)+pow(points[i][1]-points[i-1][1],2)))
+        return stroke_len 
     print("统计笔画不同长度个数:")
     stroke_lens = list()
     res = dict()
     for sketch in tqdm(sketches):
         strokes = sketch.get_strokes()
         for stroke in strokes:
-            stroke_len = stroke.get_stroke_len()
+            stroke_len = get_stroke_len(stroke)
             stroke_lens.append(stroke_len)
             div = int(stroke_len)//interval
             temp_name = (div+1)*interval
@@ -154,6 +190,39 @@ def sta_stroke_length_num(sketches,interval=100):
     print('max stroke_length_len is {},min stroke_length_len is {}, mean stroke_length_len is {}'.format(max(stroke_lens),min(stroke_lens),np.mean(stroke_lens)))
     print(sorted_res)
     print(dict(sorted_res).keys(),dict(sorted_res).values())
+
+def sta_sketch_num_of_every_cat(sketches):
+    '''
+    统计每个类别草图的个数
+    '''
+    cat_num = dict()
+    all_nums = 0
+    for sketch in tqdm(sketches):
+        all_nums += 1
+        cats = []
+        for obj in sketch.get_objects():
+            cats.append(obj["category"])
+        cats = list(set(cats))
+        for cat in cats:
+            if cat in cat_num:
+                cat_num[cat] += 1
+            else: 
+                cat_num[cat] = 1
+                
+    cat_by_name_origin = sorted(cat_num.items(), key = lambda item:item[0], reverse = False)
+    cat_by_name = dict(cat_by_name_origin)
+    cat_name_nums = cat_by_name.values()
+    cat_name_nums = list(cat_name_nums)
+    weights = np.array(cat_name_nums)
+    weights = weights / all_nums
+    weights = np.around(weights, decimals = 4) #保留两位小数
+    
+    print("统计每个类别的草图数:")
+    print(len(cat_by_name_origin), cat_by_name_origin)
+    weights = [str(w) for w in weights] # 方便直接复制过去使用
+    print("每个类别权值为：{}, 总共：{}".format((',').join(weights), len(weights)))
+    
+    return cat_num
         
 def sta_object_num_of_every_cat(sketches):
     '''
@@ -162,40 +231,31 @@ def sta_object_num_of_every_cat(sketches):
     cat_num = dict()
     all_nums = 0
     for sketch in tqdm(sketches):
-        for item in sketch.get_items():
+        for obj in sketch.get_objects():
             all_nums += 1
-            if item.category in cat_num:
-                cat_num[item.category] += 1
+            if obj["category"] in cat_num:
+                cat_num[obj["category"]] += 1
             else: 
-                cat_num[item.category] = 1
-                
-            if item.category == "suitcase":
-                print(sketch.sketch_name)
-#     cat_num=sorted(cat_num.items(), key = lambda item:item[1], reverse = True)
-#     less100_cats = list()
-#     num = 0
-#     for te in cat_num:
-#         if te[1] < 100:
-#             num += 1
-#             less100_cats.append(te[0])
-#     print("统计每个类别物体的个数:")
-#     print(len(cat_num), cat_num, num, all_nums)
+                cat_num[obj["category"]] = 1
     
     cat_by_name_origin = sorted(cat_num.items(), key = lambda item:item[0], reverse = False)
     cat_by_name = dict(cat_by_name_origin)
-    others_num = cat_by_name.pop("others")
+    # others_num = cat_by_name.pop("others")
     cat_name_nums = cat_by_name.values()
     cat_name_nums = list(cat_name_nums)
-    cat_name_nums.append(others_num) 
+    # cat_name_nums.append(others_num) 
     
     weights = np.array(cat_name_nums)
-    weights = np.median(weights) / weights
-    weights = np.around(weights, decimals = 2) #保留两位小数
+    # weights = np.median(weights) / weights
+    weights = weights / all_nums
+    weights = np.around(weights, decimals = 4) #保留两位小数
     
-    print("统计每个类别的笔画数:")
+    print("统计每个类别的物体数:")
     print(len(cat_by_name_origin), cat_by_name_origin)
     weights = [str(w) for w in weights] # 方便直接复制过去使用
     print("每个类别权值为：{}, 总共：{}".format((',').join(weights), len(weights)))
+
+    print(all_nums)
     
     return cat_num
 
@@ -239,11 +299,7 @@ def sta_width_height(sketches):
         width, height = sketch.resolution
         widths.append(width)
         heights.append(height)
-    print("max width is {}, min width is {}. max height is {}, min height is {}".format(np.max(widths), np.min(widths), np.max(heights), np.min(heights)))
-
-def change_sketch_catogery(sketches, less100_cats):
-    for sketch in tqdm(sketches):
-        sketch.save_new_json('~/tmp/sketch2',less100_cats)    
+    print("max width is {}, min width is {}. max height is {}, min height is {}".format(np.max(widths), np.min(widths), np.max(heights), np.min(heights)))   
     
 def get_all_sketches(path, sketches_json):
     print("load sketch json:")
@@ -285,6 +341,10 @@ def get_parser(prog='statistics sketch'):
                         type=bool,
                         default=False,
                         help='statistic the number of points in every stroke')
+    parser.add_argument('--sketch_time',
+                        type=bool,
+                        default=False,
+                        help='statistic draw time of every sketch')
     parser.add_argument('--stroke_length_num',
                         type=bool,
                         default=False,
@@ -308,29 +368,29 @@ def get_parser(prog='statistics sketch'):
     
     return parser.parse_args()
 
-# python scripts/statistics.py --sketch_path ~/datasets/SFSD/sketch --sketch_point_num True --interval 1000
-
 if __name__ == '__main__':
     args=get_parser()
     sketches_json=[file for file in os.listdir(args.sketch_path) if os.path.isfile(os.path.join(args.sketch_path, file))]
     sketches=get_all_sketches(args.sketch_path, sketches_json)
     print("the number of sketches is {}".format(len(sketches)))
     if args.sketch_stroke_num:
-        sta_sketch_stroke_num(sketches,args.interval)
+        sta_sketch_stroke_num(sketches, args.interval)
     if args.sketch_object_num:
         sta_sketch_object_num(sketches)
-    # if args.stroke_length_num:
-    #     sta_stroke_length_num(sketches,args.interval)
-#     if args.cat_object_num:
-#         sta_object_num_of_every_cat(sketches)
+    if args.stroke_length_num:
+        sta_stroke_length_num(sketches,args.interval)
+    if args.cat_object_num:
+        sta_object_num_of_every_cat(sketches)
+        sta_sketch_num_of_every_cat(sketches)
+    if args.sketch_time:
+        sta_sketch_point_num(sketches, args.interval)
 #     if args.cat_stroke_num:
 #         sta_stroke_num_of_every_cat(sketches)
-#     if args.sketch_cat_num:
-#         sta_sketch_category_num(sketches,args.interval)
-#     if args.cat_sketch_num:
-#         sta_category_sketch_num(sketches,args.interval)
-# #     change_sketch_catogery(sketches,less100_cats)
+    if args.sketch_cat_num:
+        sta_sketch_category_num(sketches, args.interval)
+    if args.cat_sketch_num:
+        sta_category_sketch_num(sketches, args.interval)
 #     if args.sta_width_height:
 #         sta_width_height(sketches)
 
-# python statistic.py --sketch_path ~/datasets/SFSD-open/sketches --sketch_stroke_num True
+# python statistic.py --sketch_path ~/datasets/SFSD-open/sketches --cat_object_num True

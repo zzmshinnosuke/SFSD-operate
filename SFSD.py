@@ -49,6 +49,10 @@ class Sketch():
     def get_stroke_num(self):
         return len(self.get_strokes())
     
+    def get_all_category(self):
+        all_category=[obj["category"] for obj in self.get_objects()]
+        return list(set(all_category))
+    
     def gen_image_MPL(self, stroke_width=1.5):
         # Visualize the sketch
         def color2hex(color):
